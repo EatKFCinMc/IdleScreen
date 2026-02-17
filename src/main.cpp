@@ -1,83 +1,53 @@
-// main.cpp
-// Black-screen idle watcher: shows a full-screen black overlay after user inactivity.
-
 #include "BlackOverlay.h"
 
-#include <shellapi.h>
-#include <windows.h>
-
 #include <string>
+#include <chrono>
+#include <thread>
 
 namespace {
 
-constexpr DWORD kDefaultIdleTimeoutMs = 60'000; // 1 minute default.
-constexpr UINT kTimerIntervalMs = 100;
+unsigned int kDefaultIdleTimeoutMs = 6000;
+unsigned int idleIntervalMs = 100;
+unsigned int activeIntervalMs = 1000;
 
-DWORD GetIdleMilliseconds() {
-    LASTINPUTINFO info{};
-    info.cbSize = sizeof(LASTINPUTINFO);
-    if (!GetLastInputInfo(&info)) {
-        return 0;
-    }
-    const DWORD now = GetTickCount();
-    return now - info.dwTime;
-}
-
-DWORD ParseIdleTimeoutFromArgs() {
-    int argc = 0;
-    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    DWORD timeout = kDefaultIdleTimeoutMs;
+unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
+    unsigned int timeout = kDefaultIdleTimeoutMs;
     if (argv && argc >= 2) {
         try {
-            const std::wstring arg = argv[1];
-            const DWORD parsed = std::stoul(arg);
+            const std::string arg = argv[1];
+            const unsigned int parsed = std::stoul(arg);
             if (parsed > 0) {
                 timeout = parsed;
             }
-        } catch (...) {
-            // Keep default on parse failure.
-        }
+        } catch (...) { }
     }
-    if (argv) {
-        LocalFree(argv);
-    }
+    if (argv)
+        free(argv);
     return timeout;
 }
 
 } // namespace
 
-int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
-    const DWORD idleTimeoutMs = ParseIdleTimeoutFromArgs();
+int main(int argc, char** argv) {
+    const auto idleTimeoutMs = ParseIdleTimeoutFromArgs(argc, argv);
 
     BlackOverlay overlay;
-    if (!overlay.initialize(hInstance)) {
-        MessageBoxW(nullptr, L"Failed to create overlay window.", L"Black Screen Idle Watcher", MB_ICONERROR | MB_OK);
-        return 1;
-    }
+    overlay.initialize();
 
-    const UINT_PTR timerId = SetTimer(nullptr, 0, kTimerIntervalMs, nullptr);
-    if (timerId == 0) {
-        MessageBoxW(nullptr, L"Failed to start idle timer.", L"Black Screen Idle Watcher", MB_ICONERROR | MB_OK);
-        return 1;
-    }
+    auto timeToSleep = activeIntervalMs;
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeToSleep));
+        auto idleMs = BlackOverlay::GetIdleMilliseconds();
 
-    MSG msg{};
-    while (GetMessageW(&msg, nullptr, 0, 0)) {
-        if (msg.message == WM_TIMER && msg.wParam == timerId) {
-            const DWORD idleMs = GetIdleMilliseconds();
-            if (idleMs >= idleTimeoutMs && !overlay.isVisible()) {
-                overlay.show();
-            } else if (idleMs < idleTimeoutMs && overlay.isVisible()) {
-                overlay.hide();
-            }
-            continue;
+        if (idleMs >= idleTimeoutMs && !overlay.isVisible()) { // idle
+            overlay.show();
+            timeToSleep = idleIntervalMs;
+        } else if (idleMs < idleTimeoutMs && overlay.isVisible()) { // active
+            overlay.hide();
+            timeToSleep = activeIntervalMs;
         }
-
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
     }
 
-    KillTimer(nullptr, timerId);
-    overlay.hide();
-    return 0;
+    // overlay.hide();
+    // return 0;
 }

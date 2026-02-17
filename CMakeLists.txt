@@ -1,30 +1,27 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(BlackScreenIdleWatcher LANGUAGES CXX)
+project(IdleScreen CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(BlackScreenIdleWatcher WIN32
-    src/main.cpp
-    src/BlackOverlay.cpp
+add_executable(IdleScreen WIN32
+        src/main.cpp
+        src/win/BlackOverlay_win.cpp
 )
 
-if(MINGW)
-    # Ensure the wide-character entry point (wWinMain) is used.
-    target_link_options(BlackScreenIdleWatcher PRIVATE -municode)
-endif()
-
-target_include_directories(BlackScreenIdleWatcher PRIVATE include)
-
-target_compile_definitions(BlackScreenIdleWatcher PRIVATE
-    UNICODE
-    _UNICODE
+target_include_directories(IdleScreen
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-if(MSVC)
-    target_compile_options(BlackScreenIdleWatcher PRIVATE /W4 /permissive-)
+if (WIN32)
+    target_compile_definitions(IdleScreen PRIVATE
+            UNICODE
+            _UNICODE
+            WIN32_LEAN_AND_MEAN
+    )
 else()
-    target_compile_options(BlackScreenIdleWatcher PRIVATE -Wall -Wextra -Wpedantic)
+    message(FATAL_ERROR "This project currently supports Windows only.")
 endif()
