@@ -1,4 +1,4 @@
-#include "BlackOverlay.h"
+#include "overlay.h"
 
 #include <windows.h>
 
