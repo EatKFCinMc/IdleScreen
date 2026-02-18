@@ -1,6 +1,6 @@
 # Idle Overlay
 
-Small Windows app that shows a full-screen black overlay after the user has been idle for a configurable time. Compatible with OLED screen the most. 
+Small Windows app that shows a fullscreen black overlay after the user has been idled for a configurable time. Compatible with OLED screen the most. 
 
 ## Build
 ```powershell
@@ -17,9 +17,9 @@ cmake --build .
 `idle_timeout_ms` is optional. Defaults to 60000 (1 minute).
 
 ## Todo List
-- [ ]Add a tray icon for quick enable/disable and timeout changes.
-- [ ]Persist settings in the registry or a small config file.
-- [ ]Add a small GUI for configuration and diagnostics.
+- [ ] Add a tray icon for quick enable/disable and timeout changes.
+- [ ] Persist settings in the registry or a small config file.
+- [ ] Add a small GUI for configuration and diagnostics.
 
 ## Why?
 
