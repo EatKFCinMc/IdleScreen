@@ -2,12 +2,12 @@
 
 #include <memory>
 
-class BlackOverlay {
+class overlay {
 public:
-    BlackOverlay();
-    ~BlackOverlay();
+    overlay();
+    ~overlay();
 
-    bool initialize();
+    bool init();
     void show();
     void hide();
     bool isVisible() const;
@@ -20,5 +20,5 @@ private:
     void showCursor();
 
     struct Impl;
-    std::unique_ptr<Impl> impl;
+    std::unique_ptr<Impl> var;
 };

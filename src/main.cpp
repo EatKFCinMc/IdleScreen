@@ -1,4 +1,4 @@
-#include "BlackOverlay.h"
+#include "overlay.h"
 
 #include <string>
 #include <chrono>
@@ -31,13 +31,13 @@ unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
 int main(int argc, char** argv) {
     const auto idleTimeoutMs = ParseIdleTimeoutFromArgs(argc, argv);
 
-    BlackOverlay overlay;
-    overlay.initialize();
+    overlay overlay;
+    overlay.init();
 
     auto timeToSleep = activeIntervalMs;
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(timeToSleep));
-        auto idleMs = BlackOverlay::GetIdleMilliseconds();
+        auto idleMs = overlay::GetIdleMilliseconds();
 
         if (idleMs >= idleTimeoutMs && !overlay.isVisible()) { // idle
             overlay.show();
