@@ -1,6 +1,7 @@
 #include "overlay.h"
 
 #include <windows.h>
+#include "resources.h"
 
 namespace {
     const wchar_t kWindowClassName[] = L"IdleScreen";
@@ -29,6 +30,8 @@ namespace {
                     ShowWindow(hwnd, SW_HIDE);
                 }
                 return 0;
+            case WM_TRAYMESSAGE:
+
             default:
                 return DefWindowProc(hwnd, msg, wparam, lparam);
         }
@@ -40,6 +43,7 @@ struct overlay::Impl {
     HWND m_hwnd;
     bool m_visible;
     bool m_cursorHidden;
+    NOTIFYICONDATA nid;
 };
 
 overlay::overlay() {
@@ -48,6 +52,10 @@ overlay::overlay() {
     var->m_hwnd = nullptr;
     var->m_visible = false;
     var->m_cursorHidden = false;
+    kDefaultIdleTimeoutMs = 6000;
+    idleIntervalMs = 100;
+    activeIntervalMs = 1000;
+    exit = false;
 }
 
 overlay::~overlay() {
@@ -56,7 +64,13 @@ overlay::~overlay() {
     if (var->m_instance) UnregisterClassW(kWindowClassName, var->m_instance);
 }
 
-bool overlay::init() {
+bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
+    unsigned int active = 1000) {
+
+    kDefaultIdleTimeoutMs = timeout;
+    idleIntervalMs = idle;
+    activeIntervalMs = active;
+
     var->m_instance = GetModuleHandle(nullptr);
 
     WNDCLASSEXW wc{};
@@ -85,7 +99,23 @@ bool overlay::init() {
     if (!var->m_hwnd)
         return false;
 
+    var->nid.cbSize = sizeof(NOTIFYICONDATA);
+    var->nid.hWnd = var->m_hwnd;
+    var->nid.uVersion = NOTIFYICON_VERSION;
+    var->nid.uCallbackMessage = WM_TRAYMESSAGE;
+    var->nid.hIcon = (HICON)LoadImageW(
+        GetModuleHandleW(nullptr),
+        MAKEINTRESOURCEW(IDI_ICON),
+        IMAGE_ICON,
+        16, 16,
+        LR_DEFAULTCOLOR
+    );
+    var->nid.uID = 239; // random makeup number
+    wcscpy_s(var->nid.szTip, L"Idle Screen");
+    var->nid.uFlags = NIF_TIP | NIF_ICON | NIF_MESSAGE;
+
     resizeToVirtualScreen();
+    ShowTrayIcon();
     return true;
 }
 
@@ -146,4 +176,12 @@ void overlay::showCursor() {
         return;
     while (ShowCursor(TRUE) < 0) {}
     var->m_cursorHidden = false;
+}
+
+void overlay::ShowTrayIcon() {
+    Shell_NotifyIcon(NIM_ADD, &var->nid);
+}
+
+void overlay::RemoveTrayIcon() {
+    Shell_NotifyIcon(NIM_DELETE, &var->nid);
 }

@@ -14,6 +14,7 @@ target_sources(IdleScreen PRIVATE
 
 target_include_directories(IdleScreen PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 if (WIN32)
@@ -21,6 +22,7 @@ if (WIN32)
 
     target_sources(IdleScreen PRIVATE
             src/win/overlay_win.cpp
+            src/resources.rc
     )
 
     target_compile_definitions(IdleScreen PRIVATE

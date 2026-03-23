@@ -4,7 +4,7 @@
 #include <chrono>
 #include <thread>
 
-namespace {
+// namespace {
 
 unsigned int kDefaultIdleTimeoutMs = 6000;
 unsigned int idleIntervalMs = 100;
@@ -26,28 +26,30 @@ unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
     return timeout;
 }
 
-} // namespace
+// } // namespace
 
 int main(int argc, char** argv) {
     const auto idleTimeoutMs = ParseIdleTimeoutFromArgs(argc, argv);
 
     overlay overlay;
-    overlay.init();
+    overlay.init(idleTimeoutMs, idleIntervalMs, activeIntervalMs);
 
-    auto timeToSleep = activeIntervalMs;
+    auto timeToSleep = overlay.activeIntervalMs;
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(timeToSleep));
         auto idleMs = overlay::GetIdleMilliseconds();
 
         if (idleMs >= idleTimeoutMs && !overlay.isVisible()) { // idle
             overlay.show();
-            timeToSleep = idleIntervalMs;
+            timeToSleep = overlay.idleIntervalMs;
         } else if (idleMs < idleTimeoutMs && overlay.isVisible()) { // active
             overlay.hide();
-            timeToSleep = activeIntervalMs;
+            timeToSleep = overlay.activeIntervalMs;
         }
+
+        if (overlay.exit) break;
     }
 
-    // overlay.hide();
-    // return 0;
+    overlay.hide();
+    return 0;
 }
