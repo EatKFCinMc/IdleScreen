@@ -22,7 +22,7 @@ unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
         } catch (...) {
             if (argv)
                 free(argv);
-            return 6000;
+            return 60000;
         }
     }
     if (argv)
