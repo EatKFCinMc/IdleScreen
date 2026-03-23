@@ -1,7 +1,14 @@
 #include "overlay.h"
 
 #include <windows.h>
+#include <shellapi.h>
+#include <iostream>
+#include <thread>
 #include "resources.h"
+
+#define WMTRAYMESSAGE (WM_USER + 100)
+#define IDM_PAUSE (WM_USER + 110)
+#define IDM_EXIT (WM_USER + 111)
 
 namespace {
     const wchar_t kWindowClassName[] = L"IdleScreen";
@@ -30,7 +37,55 @@ namespace {
                     ShowWindow(hwnd, SW_HIDE);
                 }
                 return 0;
-            case WM_TRAYMESSAGE:
+
+            case WMTRAYMESSAGE:{
+                if (lparam == WM_RBUTTONUP || lparam == WM_RBUTTONDOWN) {
+                    self->setPopup(true);
+
+                    POINT pt;
+                    GetCursorPos(&pt);
+
+                    SetForegroundWindow(hwnd);
+
+                    HMENU hmenu = CreatePopupMenu();
+                    UINT flag = self->pause ? MF_CHECKED : MF_UNCHECKED;
+                    AppendMenuA(hmenu, MF_STRING | flag, IDM_PAUSE, "Pause");
+			        AppendMenuA(hmenu, MF_SEPARATOR, 0, NULL);
+                    AppendMenuA(hmenu, MF_STRING, IDM_EXIT, "Exit");
+
+                    TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, hwnd, NULL);
+
+                    DestroyMenu(hmenu);
+                    PostMessage(hwnd, WM_NULL, 0, 0);
+
+                    self->setPopup(false);
+                }
+                return 0;
+            }
+
+            case WM_COMMAND:
+                switch (wparam) {
+                    case IDM_EXIT:
+                        if (self)
+                            self->exit = true;
+                        return 0;
+                    case IDM_PAUSE:
+                        if (self)
+                            self->pause = !self->pause;
+                        return 0;
+                    default:
+                        return DefWindowProc(hwnd, msg, wparam, lparam);
+                }
+
+            case WM_DESTROY:
+                PostQuitMessage(0);
+                return 0;
+            case WM_SETCURSOR:
+                if (self && self->popupActive()) {
+                    return DefWindowProc(hwnd, msg, wparam, lparam);
+                }
+                SetCursor(NULL);
+                return TRUE;
 
             default:
                 return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -44,6 +99,7 @@ struct overlay::Impl {
     bool m_visible;
     bool m_cursorHidden;
     NOTIFYICONDATA nid;
+    bool m_popupActive;
 };
 
 overlay::overlay() {
@@ -52,16 +108,19 @@ overlay::overlay() {
     var->m_hwnd = nullptr;
     var->m_visible = false;
     var->m_cursorHidden = false;
+    var->m_popupActive = false;
     kDefaultIdleTimeoutMs = 6000;
     idleIntervalMs = 100;
     activeIntervalMs = 1000;
     exit = false;
+    pause = false;
 }
 
 overlay::~overlay() {
     if (var->m_visible) hide();
     if (var->m_hwnd) DestroyWindow(var->m_hwnd);
     if (var->m_instance) UnregisterClassW(kWindowClassName, var->m_instance);
+    Shell_NotifyIcon(NIM_DELETE, &var->nid);
 }
 
 bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
@@ -71,51 +130,67 @@ bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
     idleIntervalMs = idle;
     activeIntervalMs = active;
 
-    var->m_instance = GetModuleHandle(nullptr);
+    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
-    WNDCLASSEXW wc{};
-    wc.cbSize = sizeof(WNDCLASSEXW);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = var->m_instance;
-    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
-    wc.lpszClassName = kWindowClassName;
+    std::thread([this, hEvent]() {
+        var->m_instance = GetModuleHandle(nullptr);
 
-    if (!RegisterClassExW(&wc))
-        return false;
+        WNDCLASSEXW wc{};
+        wc.cbSize = sizeof(WNDCLASSEXW);
+        wc.style = CS_HREDRAW | CS_VREDRAW;
+        wc.lpfnWndProc = WindowProc;
+        wc.hInstance = var->m_instance;
+        // wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wc.hCursor = NULL;
+        wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+        wc.lpszClassName = kWindowClassName;
 
-    var->m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-        kWindowClassName,
-        L"",
-        WS_POPUP,
-        0, 0, 0, 0,
-        nullptr,
-        nullptr,
-        var->m_instance,
-        this);
+        if (!RegisterClassExW(&wc))
+            return false;
 
-    if (!var->m_hwnd)
-        return false;
+        var->m_hwnd = CreateWindowExW(
+            WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            kWindowClassName,
+            L"",
+            WS_POPUP,
+            0, 0, 0, 0,
+            nullptr,
+            nullptr,
+            var->m_instance,
+            this);
 
-    var->nid.cbSize = sizeof(NOTIFYICONDATA);
-    var->nid.hWnd = var->m_hwnd;
-    var->nid.uVersion = NOTIFYICON_VERSION;
-    var->nid.uCallbackMessage = WM_TRAYMESSAGE;
-    var->nid.hIcon = (HICON)LoadImageW(
-        GetModuleHandleW(nullptr),
-        MAKEINTRESOURCEW(IDI_ICON),
-        IMAGE_ICON,
-        16, 16,
-        LR_DEFAULTCOLOR
-    );
-    var->nid.uID = 239; // random makeup number
-    wcscpy_s(var->nid.szTip, L"Idle Screen");
-    var->nid.uFlags = NIF_TIP | NIF_ICON | NIF_MESSAGE;
+        if (!var->m_hwnd)
+            return false;
 
-    resizeToVirtualScreen();
-    ShowTrayIcon();
+        var->nid.cbSize = sizeof(NOTIFYICONDATA);
+        var->nid.hWnd = var->m_hwnd;
+        var->nid.uVersion = 0;
+        var->nid.uCallbackMessage = WMTRAYMESSAGE;
+        var->nid.hIcon = (HICON)LoadImageW(
+            GetModuleHandleW(nullptr),
+            MAKEINTRESOURCEW(IDI_ICON),
+            IMAGE_ICON,
+            16, 16,
+            LR_DEFAULTCOLOR
+        );
+        var->nid.uID = 239; // random number
+        wcscpy_s(var->nid.szTip, L"Idle Screen");
+        var->nid.uFlags = NIF_TIP | NIF_ICON | NIF_MESSAGE;
+
+        resizeToVirtualScreen();
+        Shell_NotifyIcon(NIM_ADD, &var->nid);
+        SetEvent(hEvent);
+
+        MSG msg;
+        while (GetMessage(&msg, NULL, 0, 0)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        return true;
+    }).detach();
+
+    WaitForSingleObject(hEvent, INFINITE);
+    CloseHandle(hEvent);
     return true;
 }
 
@@ -137,8 +212,12 @@ void overlay::show() {
     ShowWindow(var->m_hwnd, SW_SHOW);
     UpdateWindow(var->m_hwnd);
     SetForegroundWindow(var->m_hwnd);
-    hideCursor();
     var->m_visible = true;
+
+    if (var->m_cursorHidden)
+        return;
+    while (ShowCursor(FALSE) >= 0) {}
+    var->m_cursorHidden = true;
 }
 
 void overlay::hide() {
@@ -146,8 +225,12 @@ void overlay::hide() {
         return;
     }
     ShowWindow(var->m_hwnd, SW_HIDE);
-    showCursor();
     var->m_visible = false;
+
+    if (!var->m_cursorHidden)
+        return;
+    while (ShowCursor(TRUE) < 0) {}
+    var->m_cursorHidden = false;
 }
 
 bool overlay::isVisible() const {
@@ -164,24 +247,10 @@ unsigned int overlay::GetIdleMilliseconds() {
     return now - info.dwTime;
 }
 
-void overlay::hideCursor() {
-    if (var->m_cursorHidden)
-        return;
-    while (ShowCursor(FALSE) >= 0) {}
-    var->m_cursorHidden = true;
+void overlay::setPopup(bool tf) {
+    var->m_popupActive = tf;
 }
 
-void overlay::showCursor() {
-    if (!var->m_cursorHidden)
-        return;
-    while (ShowCursor(TRUE) < 0) {}
-    var->m_cursorHidden = false;
-}
-
-void overlay::ShowTrayIcon() {
-    Shell_NotifyIcon(NIM_ADD, &var->nid);
-}
-
-void overlay::RemoveTrayIcon() {
-    Shell_NotifyIcon(NIM_DELETE, &var->nid);
+bool overlay::popupActive() {
+    return var->m_popupActive;
 }
