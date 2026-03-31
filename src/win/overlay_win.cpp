@@ -43,7 +43,8 @@ namespace {
                 return 0;
 
             case WMTRAYMESSAGE:{
-                if (lparam == WM_RBUTTONUP || lparam == WM_RBUTTONDOWN) {
+                if (lparam == WM_RBUTTONUP || lparam == WM_RBUTTONDOWN ||
+                    lparam == WM_LBUTTONUP || lparam == WM_LBUTTONDOWN) {
                     self->setPopup(true);
 
                     POINT pt;
@@ -61,11 +62,11 @@ namespace {
                     AppendMenuA(hmenu, MF_STRING | flag_5min, IDM_5MIN, "5 Minutes");
                     AppendMenuA(hmenu, MF_STRING | flag_10min, IDM_10MIN, "10 Minutes");
                     AppendMenuA(hmenu, MF_STRING | flag_30min, IDM_30MIN, "30 Minutes");
-			        AppendMenuA(hmenu, MF_SEPARATOR, 0, NULL);
+			        AppendMenuA(hmenu, MF_SEPARATOR, 0, nullptr);
                     AppendMenuA(hmenu, MF_STRING | flag_pause, IDM_PAUSE, "Pause");
                     AppendMenuA(hmenu, MF_STRING, IDM_EXIT, "Exit");
 
-                    TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, hwnd, NULL);
+                    TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, hwnd, nullptr);
 
                     DestroyMenu(hmenu);
                     PostMessage(hwnd, WM_NULL, 0, 0);
@@ -112,7 +113,7 @@ namespace {
                 if (self && self->popupActive()) {
                     return DefWindowProc(hwnd, msg, wparam, lparam);
                 }
-                SetCursor(NULL);
+                SetCursor(nullptr);
                 return TRUE;
 
             default:
@@ -151,14 +152,15 @@ overlay::~overlay() {
     Shell_NotifyIcon(NIM_DELETE, &var->nid);
 }
 
-bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
-    unsigned int active = 1000) {
+bool overlay::init(const unsigned int timeout = 6000,
+    const unsigned int idle = 100, const unsigned int active = 1000) {
 
     IdleTimeoutMs = timeout;
     idleIntervalMs = idle;
     activeIntervalMs = active;
 
-    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    SetProcessDPIAware();
+    HANDLE hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
 
     std::thread([this, hEvent]() {
         var->m_instance = GetModuleHandle(nullptr);
@@ -169,8 +171,8 @@ bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
         wc.lpfnWndProc = WindowProc;
         wc.hInstance = var->m_instance;
         // wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wc.hCursor = NULL;
-        wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+        wc.hCursor = nullptr;
+        wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         wc.lpszClassName = kWindowClassName;
 
         if (!RegisterClassExW(&wc))
@@ -210,7 +212,7 @@ bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
         SetEvent(hEvent);
 
         MSG msg;
-        while (GetMessage(&msg, NULL, 0, 0)) {
+        while (GetMessage(&msg, nullptr, 0, 0)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
