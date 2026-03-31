@@ -6,7 +6,7 @@
 #include <iostream>
 
 
-unsigned int kDefaultIdleTimeoutMs = 30000;
+unsigned int kDefaultIdleTimeoutMs = 60000;
 unsigned int idleIntervalMs = 10;
 unsigned int activeIntervalMs = 100;
 
