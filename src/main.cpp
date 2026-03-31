@@ -46,10 +46,10 @@ int main(int argc, char** argv) {
         if (overlay.exit) break;
         if (overlay.pause) continue;
 
-        if (idleMs >= idleTimeoutMs && !overlay.isVisible()) { // idle
+        if (idleMs >= overlay.IdleTimeoutMs && !overlay.isVisible()) { // idle
             overlay.show();
             timeToSleep = overlay.idleIntervalMs;
-        } else if (idleMs < idleTimeoutMs && overlay.isVisible()) { // active
+        } else if (idleMs < overlay.IdleTimeoutMs && overlay.isVisible()) { // active
             overlay.hide();
             timeToSleep = overlay.activeIntervalMs;
         }
