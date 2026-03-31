@@ -15,7 +15,7 @@ public:
     void setPopup(bool tf);
     bool popupActive();
 
-    unsigned int kDefaultIdleTimeoutMs;
+    unsigned int IdleTimeoutMs;
     unsigned int idleIntervalMs;
     unsigned int activeIntervalMs;
     bool exit;

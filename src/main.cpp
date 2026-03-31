@@ -4,7 +4,7 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
-// namespace {
+
 
 unsigned int kDefaultIdleTimeoutMs = 30000;
 unsigned int idleIntervalMs = 10;
@@ -30,7 +30,6 @@ unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
     return timeout;
 }
 
-// } // namespace
 
 int main(int argc, char** argv) {
     const auto idleTimeoutMs = ParseIdleTimeoutFromArgs(argc, argv);

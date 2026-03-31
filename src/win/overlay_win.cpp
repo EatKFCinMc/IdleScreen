@@ -9,6 +9,10 @@
 #define WMTRAYMESSAGE (WM_USER + 100)
 #define IDM_PAUSE (WM_USER + 110)
 #define IDM_EXIT (WM_USER + 111)
+#define IDM_1MIN (WM_USER + 112)
+#define IDM_5MIN (WM_USER + 113)
+#define IDM_10MIN (WM_USER + 114)
+#define IDM_30MIN (WM_USER + 115)
 
 namespace {
     const wchar_t kWindowClassName[] = L"IdleScreen";
@@ -48,9 +52,17 @@ namespace {
                     SetForegroundWindow(hwnd);
 
                     HMENU hmenu = CreatePopupMenu();
-                    UINT flag = self->pause ? MF_CHECKED : MF_UNCHECKED;
-                    AppendMenuA(hmenu, MF_STRING | flag, IDM_PAUSE, "Pause");
+                    UINT flag_pause = self->pause ? MF_CHECKED : MF_UNCHECKED;
+                    UINT flag_1min = self->IdleTimeoutMs == 60000 ? MF_CHECKED : MF_UNCHECKED;
+                    UINT flag_5min = self->IdleTimeoutMs == 300000 ? MF_CHECKED : MF_UNCHECKED;
+                    UINT flag_10min = self->IdleTimeoutMs == 600000 ? MF_CHECKED : MF_UNCHECKED;
+                    UINT flag_30min = self->IdleTimeoutMs == 1800000 ? MF_CHECKED : MF_UNCHECKED;
+                    AppendMenuA(hmenu, MF_STRING | flag_1min, IDM_1MIN, "1 Minutes");
+                    AppendMenuA(hmenu, MF_STRING | flag_5min, IDM_5MIN, "5 Minutes");
+                    AppendMenuA(hmenu, MF_STRING | flag_10min, IDM_10MIN, "10 Minutes");
+                    AppendMenuA(hmenu, MF_STRING | flag_30min, IDM_30MIN, "30 Minutes");
 			        AppendMenuA(hmenu, MF_SEPARATOR, 0, NULL);
+                    AppendMenuA(hmenu, MF_STRING | flag_pause, IDM_PAUSE, "Pause");
                     AppendMenuA(hmenu, MF_STRING, IDM_EXIT, "Exit");
 
                     TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, 0, hwnd, NULL);
@@ -72,6 +84,22 @@ namespace {
                     case IDM_PAUSE:
                         if (self)
                             self->pause = !self->pause;
+                        return 0;
+                    case IDM_1MIN:
+                        if (self)
+                            self->IdleTimeoutMs = 60000;
+                        return 0;
+                    case IDM_5MIN:
+                        if (self)
+                            self->IdleTimeoutMs = 300000;
+                        return 0;
+                    case IDM_10MIN:
+                        if (self)
+                            self->IdleTimeoutMs = 600000;
+                        return 0;
+                    case IDM_30MIN:
+                        if (self)
+                            self->IdleTimeoutMs = 1800000;
                         return 0;
                     default:
                         return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -109,7 +137,7 @@ overlay::overlay() {
     var->m_visible = false;
     var->m_cursorHidden = false;
     var->m_popupActive = false;
-    kDefaultIdleTimeoutMs = 6000;
+    IdleTimeoutMs = 6000;
     idleIntervalMs = 100;
     activeIntervalMs = 1000;
     exit = false;
@@ -126,7 +154,7 @@ overlay::~overlay() {
 bool overlay::init(unsigned int timeout = 6000, unsigned int idle = 100,
     unsigned int active = 1000) {
 
-    kDefaultIdleTimeoutMs = timeout;
+    IdleTimeoutMs = timeout;
     idleIntervalMs = idle;
     activeIntervalMs = active;
 
