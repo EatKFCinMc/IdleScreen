@@ -6,9 +6,9 @@
 #include <iostream>
 // namespace {
 
-unsigned int kDefaultIdleTimeoutMs = 6000;
-unsigned int idleIntervalMs = 100;
-unsigned int activeIntervalMs = 1000;
+unsigned int kDefaultIdleTimeoutMs = 30000;
+unsigned int idleIntervalMs = 10;
+unsigned int activeIntervalMs = 100;
 
 unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
     unsigned int timeout = kDefaultIdleTimeoutMs;
