@@ -1,8 +1,8 @@
 # Idle Overlay
 
-Small Windows app that shows a fullscreen black overlay after the user has been idled for a configurable time. Compatible with OLED screen the most. 
+Small Windows app that shows a fullscreen black overlay after the user has been idled for a
+configurable time. Compatible with OLED screen the most. 
 
-It's finally usable 
 
 ## Build
 ```powershell
