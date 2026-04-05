@@ -25,6 +25,10 @@ if (WIN32)
             src/resources.rc
     )
 
+    target_link_libraries(IdleScreen
+            shlwapi
+    )
+
     target_compile_definitions(IdleScreen PRIVATE
             UNICODE
             _UNICODE

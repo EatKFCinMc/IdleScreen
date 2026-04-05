@@ -2,6 +2,9 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <Shlobj.h>
+#include <Shlwapi.h>
+
 #include <iostream>
 #include <thread>
 #include "resources.h"
@@ -13,6 +16,7 @@
 #define IDM_5MIN (WM_USER + 113)
 #define IDM_10MIN (WM_USER + 114)
 #define IDM_30MIN (WM_USER + 115)
+#define IDM_STARTUP (WM_USER + 116)
 
 namespace {
     const wchar_t kWindowClassName[] = L"IdleScreen";
@@ -25,6 +29,8 @@ namespace {
         }
 
         auto* self = reinterpret_cast<overlay*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+        if (!self)
+            return DefWindowProc(hwnd, msg, wparam, lparam);
 
         switch (msg) {
             case WM_KEYDOWN:
@@ -35,11 +41,7 @@ namespace {
             case WM_XBUTTONDOWN:
             case WM_MOUSEWHEEL:
             case WM_MOUSEHWHEEL:
-                if (self) {
-                    self->hide();
-                } else {
-                    ShowWindow(hwnd, SW_HIDE);
-                }
+                self->hide();
                 return 0;
 
             case WMTRAYMESSAGE:{
@@ -58,11 +60,14 @@ namespace {
                     UINT flag_5min = self->IdleTimeoutMs == 300000 ? MF_CHECKED : MF_UNCHECKED;
                     UINT flag_10min = self->IdleTimeoutMs == 600000 ? MF_CHECKED : MF_UNCHECKED;
                     UINT flag_30min = self->IdleTimeoutMs == 1800000 ? MF_CHECKED : MF_UNCHECKED;
+                    self->is_startup = self->check_startup();
+                    UINT flag_startup = self->is_startup ? MF_CHECKED : MF_UNCHECKED;
                     AppendMenuA(hmenu, MF_STRING | flag_1min, IDM_1MIN, "1 Minutes");
                     AppendMenuA(hmenu, MF_STRING | flag_5min, IDM_5MIN, "5 Minutes");
                     AppendMenuA(hmenu, MF_STRING | flag_10min, IDM_10MIN, "10 Minutes");
                     AppendMenuA(hmenu, MF_STRING | flag_30min, IDM_30MIN, "30 Minutes");
 			        AppendMenuA(hmenu, MF_SEPARATOR, 0, nullptr);
+                    AppendMenuA(hmenu, MF_STRING | flag_startup, IDM_STARTUP, "Start up");
                     AppendMenuA(hmenu, MF_STRING | flag_pause, IDM_PAUSE, "Pause");
                     AppendMenuA(hmenu, MF_STRING, IDM_EXIT, "Exit");
 
@@ -79,28 +84,29 @@ namespace {
             case WM_COMMAND:
                 switch (wparam) {
                     case IDM_EXIT:
-                        if (self)
-                            self->exit = true;
+                        self->exit = true;
                         return 0;
                     case IDM_PAUSE:
-                        if (self)
-                            self->pause = !self->pause;
+                        self->pause = !self->pause;
                         return 0;
                     case IDM_1MIN:
-                        if (self)
-                            self->IdleTimeoutMs = 60000;
+                        self->IdleTimeoutMs = 60000;
                         return 0;
                     case IDM_5MIN:
-                        if (self)
-                            self->IdleTimeoutMs = 300000;
+                        self->IdleTimeoutMs = 300000;
                         return 0;
                     case IDM_10MIN:
-                        if (self)
-                            self->IdleTimeoutMs = 600000;
+                        self->IdleTimeoutMs = 600000;
                         return 0;
                     case IDM_30MIN:
-                        if (self)
-                            self->IdleTimeoutMs = 1800000;
+                        self->IdleTimeoutMs = 1800000;
+                        return 0;
+                    case IDM_STARTUP:
+                        self->is_startup = self->check_startup();
+                        if (!self->is_startup)
+                            self->add_startup();
+                        else
+                            self->remove_startup();
                         return 0;
                     default:
                         return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -110,12 +116,10 @@ namespace {
                 PostQuitMessage(0);
                 return 0;
             case WM_SETCURSOR:
-                if (self && self->popupActive()) {
+                if (self->popupActive())
                     return DefWindowProc(hwnd, msg, wparam, lparam);
-                }
                 SetCursor(nullptr);
                 return TRUE;
-
             default:
                 return DefWindowProc(hwnd, msg, wparam, lparam);
         }
@@ -143,6 +147,7 @@ overlay::overlay() {
     activeIntervalMs = 1000;
     exit = false;
     pause = false;
+    is_startup = false;
 }
 
 overlay::~overlay() {
@@ -152,12 +157,14 @@ overlay::~overlay() {
     Shell_NotifyIcon(NIM_DELETE, &var->nid);
 }
 
-bool overlay::init(const unsigned int timeout = 6000,
-    const unsigned int idle = 100, const unsigned int active = 1000) {
+bool overlay::init(const unsigned int timeout = 6000, const unsigned int idle = 100,
+    const unsigned int active = 1000, std::string program_path = nullptr) {
 
     IdleTimeoutMs = timeout;
     idleIntervalMs = idle;
     activeIntervalMs = active;
+    path = program_path;
+    is_startup = check_startup();
 
     SetProcessDPIAware();
     HANDLE hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
@@ -179,7 +186,7 @@ bool overlay::init(const unsigned int timeout = 6000,
             return false;
 
         var->m_hwnd = CreateWindowExW(
-            WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            WS_EX_TOPMOST | WS_EX_WINDOWEDGE,
             kWindowClassName,
             L"",
             WS_POPUP,
@@ -270,9 +277,7 @@ bool overlay::isVisible() const {
 unsigned int overlay::GetIdleMilliseconds() {
     LASTINPUTINFO info{};
     info.cbSize = sizeof(LASTINPUTINFO);
-    if (!GetLastInputInfo(&info)) {
-        return 0;
-    }
+    if (!GetLastInputInfo(&info)) return 0;
     const DWORD now = GetTickCount();
     return now - info.dwTime;
 }
@@ -281,6 +286,65 @@ void overlay::setPopup(bool tf) {
     var->m_popupActive = tf;
 }
 
-bool overlay::popupActive() {
+bool overlay::popupActive() const {
     return var->m_popupActive;
+}
+
+bool overlay::check_startup() const {
+    WCHAR profile_path[MAX_PATH];
+    SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, profile_path);
+    const size_t wSize = wcslen(profile_path)+1;
+    char startup[wSize + 1];
+    wcstombs(startup, profile_path,wSize);
+    strcat(startup, "\\idleScreen.lnk");
+
+    if (PathFileExistsA(startup)) return true;
+    return false;
+}
+
+void overlay::add_startup() const {
+    HRESULT hres;
+    hres = CoInitialize(nullptr);
+    if (FAILED(hres)) return;
+    IShellLink* psl;
+    hres = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLink, (LPVOID*)&psl);
+
+    if (SUCCEEDED(hres)) {
+        const size_t cSize = strlen(path.c_str())+1;
+        wchar_t wc[cSize + 1];
+        size_t tmp = 0;
+        mbstowcs_s(&tmp, wc, cSize, path.c_str(), cSize);
+
+        IPersistFile* ppf;
+        psl->SetPath(wc);
+        hres = psl->QueryInterface(IID_IPersistFile, (LPVOID*)&ppf);
+
+        WCHAR profile_path[MAX_PATH];
+        SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, profile_path);
+        const size_t wSize = wcslen(profile_path)+1;
+        char startup[wSize + 1];
+        wcstombs(startup, profile_path, wSize);
+        strcat(startup, "\\idleScreen.lnk");
+
+        if (SUCCEEDED(hres)) {
+            WCHAR wsz[MAX_PATH];
+            MultiByteToWideChar(CP_ACP, 0, startup, -1, wsz, MAX_PATH);
+            ppf->Save(wsz, TRUE);
+            ppf->Release();
+        }
+
+        // release resources
+        psl->Release();
+        CoUninitialize();
+    }
+} // I hate convertion, and wchar
+
+void overlay::remove_startup() const{
+    if (!is_startup) return;
+
+    WCHAR startup[MAX_PATH];
+    SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startup);
+    wcscat(startup, L"\\idleScreen.lnk");
+
+    DeleteFile(startup);
 }

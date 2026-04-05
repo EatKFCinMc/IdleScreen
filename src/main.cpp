@@ -9,24 +9,28 @@
 unsigned int kDefaultIdleTimeoutMs = 60000;
 unsigned int idleIntervalMs = 10;
 unsigned int activeIntervalMs = 100;
+std::string path;
 
 unsigned int ParseIdleTimeoutFromArgs(int argc, char** argv) {
     unsigned int timeout = kDefaultIdleTimeoutMs;
-    if (argv && argc >= 2) {
-        try {
-            const std::string arg = argv[1];
-            const unsigned int parsed = std::stoul(arg);
-            if (parsed > 0) {
-                timeout = parsed * 1000;
-            }
-        } catch (...) {
-            if (argv)
+
+    if (argv) {
+        path = argv[0];
+
+        if (argc >= 2) {
+            try {
+                const std::string arg = argv[1];
+                const unsigned int parsed = std::stoul(arg);
+                if (parsed > 0) {
+                    timeout = parsed * 1000;
+                }
+            } catch (...) {
                 free(argv);
-            return 60000;
+                return kDefaultIdleTimeoutMs;
+            }
         }
-    }
-    if (argv)
         free(argv);
+    }
     return timeout;
 }
 
@@ -35,7 +39,7 @@ int main(int argc, char** argv) {
     const auto idleTimeoutMs = ParseIdleTimeoutFromArgs(argc, argv);
 
     overlay overlay;
-    if (!overlay.init(idleTimeoutMs, idleIntervalMs, activeIntervalMs))
+    if (!overlay.init(idleTimeoutMs, idleIntervalMs, activeIntervalMs, path))
         return -1;
 
 
