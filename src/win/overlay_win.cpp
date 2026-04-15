@@ -186,7 +186,7 @@ bool overlay::init(const unsigned int timeout = 6000, const unsigned int idle = 
             return false;
 
         var->m_hwnd = CreateWindowExW(
-            WS_EX_TOPMOST | WS_EX_WINDOWEDGE,
+            WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
             kWindowClassName,
             L"",
             WS_POPUP,
@@ -250,6 +250,8 @@ void overlay::show() {
     UpdateWindow(var->m_hwnd);
     SetForegroundWindow(var->m_hwnd);
     var->m_visible = true;
+    SetFocus(var->m_hwnd);
+    SendMessage(var->m_hwnd, WM_SYSCOMMAND, SC_MONITORPOWER, 1);
 
     if (var->m_cursorHidden)
         return;
@@ -261,6 +263,7 @@ void overlay::hide() {
     if (!var->m_hwnd) {
         return;
     }
+    SendMessage(var->m_hwnd, WM_SYSCOMMAND, SC_MONITORPOWER, -1);
     ShowWindow(var->m_hwnd, SW_HIDE);
     var->m_visible = false;
 
